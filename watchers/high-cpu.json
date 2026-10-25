@@ -1,0 +1,48 @@
+{
+  "metadata": { "threshold": 0.85, "window": "5m" },
+  "trigger": { "schedule": { "interval": "5m" } },
+  "input": {
+    "search": {
+      "request": {
+        "indices": ["metricbeat-*"],
+        "body": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "filter": [
+                { "range": { "@timestamp": { "gte": "now-{{ctx.metadata.window}}" } } },
+                { "term": { "event.module": "system" } }
+              ]
+            }
+          },
+          "aggs": {
+            "hosts": {
+              "terms": { "field": "host.name", "size": 100 },
+              "aggs": { "avg_cpu": { "avg": { "field": "system.cpu.total.norm.pct" } } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "condition": {
+    "script": {
+      "lang": "painless",
+      "source": "return ctx.payload.aggregations.hosts.buckets.stream().anyMatch(b -> b.avg_cpu.value != null && b.avg_cpu.value > ctx.metadata.threshold);"
+    }
+  },
+  "transform": {
+    "script": {
+      "lang": "painless",
+      "source": "def hot = new ArrayList(); for (b in ctx.payload.aggregations.hosts.buckets) { if (b.avg_cpu.value != null && b.avg_cpu.value > ctx.metadata.threshold) { hot.add(b.key + ' (' + Math.round(b.avg_cpu.value * 100) + '%)'); } } return ['hosts': hot];"
+    }
+  },
+  "actions": {
+    "log_it": {
+      "logging": {
+        "level": "warn",
+        "text": "High CPU (> {{ctx.metadata.threshold}}) over {{ctx.metadata.window}} on: {{#ctx.payload.hosts}}{{.}} {{/ctx.payload.hosts}}"
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "metadata": { "max_errors": 50, "window": "10m" },
+  "trigger": { "schedule": { "interval": "5m" } },
+  "input": {
+    "search": {
+      "request": {
+        "indices": ["filebeat-*"],
+        "body": {
+          "size": 0,
+          "track_total_hits": true,
+          "query": {
+            "bool": {
+              "filter": [
+                { "range": { "@timestamp": { "gte": "now-{{ctx.metadata.window}}" } } },
+                { "term": { "log.level": "error" } }
+              ]
+            }
+          },
+          "aggs": {
+            "by_service": { "terms": { "field": "service.name", "size": 5 } }
+          }
+        }
+      }
+    }
+  },
+  "condition": {
+    "compare": { "ctx.payload.hits.total": { "gt": 50 } }
+  },
+  "actions": {
+    "log_it": {
+      "logging": {
+        "level": "error",
+        "text": "{{ctx.payload.hits.total}} errors in the last {{ctx.metadata.window}}. Top services: {{#ctx.payload.aggregations.by_service.buckets}}{{key}}={{doc_count}} {{/ctx.payload.aggregations.by_service.buckets}}"
+      }
+    }
+  }
+}

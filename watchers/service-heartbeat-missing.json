@@ -1,0 +1,48 @@
+{
+  "metadata": { "window": "5m" },
+  "trigger": { "schedule": { "interval": "2m" } },
+  "input": {
+    "search": {
+      "request": {
+        "indices": ["heartbeat-*"],
+        "body": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "filter": [
+                { "range": { "@timestamp": { "gte": "now-{{ctx.metadata.window}}" } } },
+                { "term": { "monitor.status": "down" } }
+              ]
+            }
+          },
+          "aggs": {
+            "down_monitors": { "terms": { "field": "monitor.name", "size": 20 } }
+          }
+        }
+      }
+    }
+  },
+  "condition": {
+    "compare": { "ctx.payload.hits.total": { "gt": 0 } }
+  },
+  "actions": {
+    "log_it": {
+      "logging": {
+        "level": "error",
+        "text": "Monitors DOWN: {{#ctx.payload.aggregations.down_monitors.buckets}}{{key}} {{/ctx.payload.aggregations.down_monitors.buckets}}"
+      }
+    },
+    "notify_webhook": {
+      "throttle_period": "15m",
+      "webhook": {
+        "scheme": "https",
+        "host": "hooks.example.com",
+        "port": 443,
+        "method": "post",
+        "path": "/alerts",
+        "headers": { "Content-Type": "application/json" },
+        "body": "{\"text\": \"Monitors down: {{#ctx.payload.aggregations.down_monitors.buckets}}{{key}} {{/ctx.payload.aggregations.down_monitors.buckets}}\"}"
+      }
+    }
+  }
+}
