@@ -1,0 +1,17 @@
+name: Validate
+on:
+  push:
+  pull_request:
+
+jobs:
+  watchers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate watcher JSON
+        run: python scripts/deploy_watchers.py --dry-run
+      - name: Check sample data trips each watcher
+        run: python -m unittest discover -s tests -v
